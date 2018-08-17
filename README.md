@@ -4,7 +4,7 @@ Demo that reports a custom-formatted Rick-and-Morty-themed build status to a Git
 
 ### To install in your AWS account and GitHub account
 
-First, set up a CodeBuild project that builds a repository in your GitHub account, with a GitHub webhook to trigger builds for pull requests.
+First, set up a CodeBuild project that builds a repository in your GitHub account, with a GitHub webhook to trigger builds for pull requests. [See directions here.](https://docs.aws.amazon.com/codebuild/latest/userguide/sample-github-pull-request.html)
 
 Create a custom OAuth application in your GitHub account:
 
