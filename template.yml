@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: Reports custom-formatted CodeBuild build status to GitHub OAuth application
+
+Parameters:
+  GitHubOAuthTokenParameter:
+    Description: Parameter Store parameter where encrypted GitHub OAuth Token is stored
+    Type: AWS::SSM::Parameter::Name
+    Default: ci-rick-github-token
+
+Resources:
+  GitHubNotifications:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: github_status.handler
+      Runtime: nodejs8.10
+      CodeUri: .
+      Description: >-
+        Reports build status to GitHub
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - KMSDecryptPolicy:
+            KeyId: '*'
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: "Allow"
+              Action:
+                - "ssm:GetParameter"
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${GitHubOAuthTokenParameter}"
+      Events:
+        BuildTrigger:
+          Type: CloudWatchEvent
+          Properties:
+            Pattern:
+              source:
+                - aws.codebuild
+              detail-type:
+                - CodeBuild Build State Change
+      Environment:
+        Variables:
+          oAuthTokenParameter: !Ref GitHubOAuthTokenParameter
