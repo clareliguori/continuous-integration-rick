@@ -1,0 +1,9 @@
+{
+  "name": "ci-rick",
+  "version": "1.0.0",
+  "main": "github_status.js",
+  "dependencies": {
+    "@octokit/rest": "^15.10.0"
+  },
+  "devDependencies": {}
+}

@@ -30,7 +30,15 @@ Retrieve an OAuth token for the application:
 
 Then spin up the stack in CloudFormation:
 ```
+npm install
+
 aws cloudformation package --template-file template.yml --s3-bucket <s3 bucket> --force-upload --output-template-file template-packaged.yml
 
 aws cloudformation deploy --stack-name ci-rick --template-file template-packaged.yml --capabilities CAPABILITY_NAMED_IAM
+```
+
+### Test Locally
+
+```
+sam local invoke -e test_event.json -n test_env_vars.json
 ```

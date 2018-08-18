@@ -1,0 +1,25 @@
+{
+  "version": "0",
+  "id": "c030038d-8c4d-6141-9545-00ff7b7153EX",
+  "detail-type": "CodeBuild Build State Change",
+  "source": "aws.codebuild",
+  "account": "123456789012",
+  "time": "2017-09-01T16:14:28Z",
+  "region": "us-west-2",
+  "resources":[
+    "arn:aws:codebuild:us-west-2:123456789012:build/my-sample-project:8745a7a9-c340-456a-9166-edf953571bEX"
+  ],
+  "detail":{
+    "build-status": "FAILED",
+    "project-name": "my-sample-project",
+    "additional-information": {
+      "initiator": "MyCodeBuildUser",
+      "source": {
+        "location": "https://github.com/clareliguori/continuous-integration-rick.git",
+        "type": "GitHub"
+      },
+      "source-version": "master"
+    },
+    "version": "1"
+  }
+}

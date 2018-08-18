@@ -1,102 +1,87 @@
 'use strict';
 
 const AWS = require('aws-sdk');
-const url = require('url');
-const https = require('https');
+const octokit = require('@octokit/rest')();
 
 const oAuthTokenParameter = process.env.oAuthTokenParameter;
 let oAuthToken;
 
-function postMessage(statusUrl, statusData, callback) {
-  const body = JSON.stringify(statusData);
-  const options = url.parse(statusUrl);
-  options.method = 'POST';
-  options.headers = {
-    'Content-Type': 'application/json',
-    'Content-Length': Buffer.byteLength(body),
-    'Authorization': `token ${oAuthToken}`
-  };
-
-  const postReq = https.request(options, (res) => {
-    const chunks = [];
-    res.setEncoding('utf8');
-    res.on('data', (chunk) => chunks.push(chunk));
-    res.on('end', () => {
-      if (callback) {
-        callback({
-          body: chunks.join(''),
-          statusCode: res.statusCode,
-          statusMessage: res.statusMessage,
-        });
-      }
-    });
-    return res;
-  });
-
-  postReq.write(body);
-  postReq.end();
-}
-
-function processEvent(event, callback) {
-  const buildStatus = event.detail['build-status'];
-  const sourceUrl = event.detail['additional-information'].source.location;
-  // TODO assumes https://github.com/owner/repo
-  // Need to handle things like non-GitHub repos, .git on the end of the URL, or extra path stuff at the front
-  const repo = url.parse(sourceUrl).pathname;
-  // TODO need validation on the commit ID or PR ref
-  const sourceVersion = event.detail['additional-information']['source-version'];
-
-  var statusUrl = `https://api.github.com/repos/${repo}/statuses/${sourceVersion}`;
-
-  var state = 'failure';
-  var description = 'DISQUALIFIED!';
-
-  if (buildStatus == 'SUCCEEDED') {
-    state = 'pending';
-    description = 'SHOW ME WHAT YOU GOT';
-  } else if (buildStatus == 'IN_PROGRESS') {
-    state = 'pending';
-    description = 'I LIKE WHAT YOU GOT';
-  }
-
-  const statusData = {
-    'context': 'I\'M CONTINUOUS INTEGRATION RICK!',
-    'state': state,
-    'description': description
-  };
-
-  postMessage(statusUrl, statusData, (response) => {
-    if (response.statusCode < 400) {
-      console.info('Message posted successfully');
-      callback(null);
-    } else if (response.statusCode < 500) {
-      console.error(`Error posting message to GitHub API: ${response.statusCode} - ${response.statusMessage}`);
-      callback(null);  // Don't retry because the error is due to a problem with the request
-    } else {
-      // Let Lambda retry
-      callback(`Server error when processing message: ${response.statusCode} - ${response.statusMessage}`);
+exports.handler = async function(event, context, callback) {
+  try {
+    // Retrieve the plaintext OAuth token
+    if (!oAuthToken) {
+      const ssm = new AWS.SSM();
+      const params = {
+        Name: oAuthTokenParameter,
+        WithDecryption: true
+      };
+      const paramResult = await ssm.getParameter(params).promise();
+      oAuthToken = paramResult.Parameter.Value;
     }
-  });
-}
+    octokit.authenticate({ type: 'oauth', token: oAuthToken });
 
-exports.handler = (event, context, callback) => {
-  if (oAuthToken) {
-    processEvent(event, callback);
-  } else if (oAuthTokenParameter) {
-    const ssm = new AWS.SSM();
-    const params = {
-      Name: oAuthTokenParameter,
-      WithDecryption: true
-    };
-    ssm.getParameter(params, (err, data) => {
-      if (err) {
-        console.log('OAuth token parameter error:', err);
-        return callback(err);
+    // Parse the incoming event
+    var sourceUrl = event.detail['additional-information'].source.location;
+    console.log(`Source URL: ${sourceUrl}`);
+    if (!sourceUrl.startsWith('https://github.com')) {
+      console.error(`Not a GitHub repo: ${sourceUrl}`);
+      callback(null);
+    } else {
+      // Parse the GitHub repo URL to get the owner and name
+      if (sourceUrl.endsWith('.git')) {
+        sourceUrl = sourceUrl.slice(0, -4);
       }
-      oAuthToken = data.Parameter.Value;
-      processEvent(event, callback);
-    });
-  } else {
-    callback('OAuth token parameter has not been set.');
+
+      const urlParts = sourceUrl.split('/');
+      const repoOwner = urlParts[urlParts.length-2];
+      const repoName = urlParts[urlParts.length-1];
+      console.log(`Owner: ${repoOwner}, repo: ${repoName}`);
+
+      var sourceVersion = event.detail['additional-information']['source-version'];
+      const buildStatus = event.detail['build-status'];
+      console.log(`Source version: ${sourceVersion}`);
+
+      // Resolve source version from CodeBuild event to GitHub commit ID
+      // This is not ideal as there is a race condition: if someone pushes a new commit
+      // while the previous build is in progress, the wrong commit will get labeled
+      // with the status.  But CodeBuild doesn't include a commit ID for pull request build events.
+      if (!sourceVersion || sourceVersion == '') {
+        sourceVersion = 'HEAD';
+      } else if (sourceVersion.startsWith('pr/')) {
+        sourceVersion = `refs/pull/${sourceVersion.split('/')[1]}/head`;
+      }
+      const commitResult = await octokit.repos.getShaOfCommitRef({owner: repoOwner, repo: repoName, ref: sourceVersion});
+      const commit = commitResult.data.sha;
+      console.log(`Commit: ${commit}`);
+
+      // Create a new status
+      var state = 'failure';
+      var description = 'DISQUALIFIED!';
+      if (buildStatus == 'SUCCEEDED') {
+        state = 'pending';
+        description = 'SHOW ME WHAT YOU GOT';
+      } else if (buildStatus == 'IN_PROGRESS') {
+        state = 'pending';
+        description = 'I LIKE WHAT YOU GOT';
+      }
+
+      await octokit.repos.createStatus({
+        owner: repoOwner,
+        repo: repoName,
+        sha: commit,
+        state: state,
+        description: description,
+        context: 'I\'M CONTINUOUS INTEGRATION RICK!'
+      });
+
+      console.log(`Status successfully set! ${state}, ${description}`);
+      callback(null);
+    }
+  } catch (err) {
+    // TODO better error handling so that errors (problems with request inputs)
+    // are treated as function success, but 500s from GitHub return a function
+    // error so that the function is retried.
+    console.error(err);
+    callback(null, err.message);
   }
 };
