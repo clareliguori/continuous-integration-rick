@@ -58,11 +58,11 @@ exports.handler = async function(event, context, callback) {
       var state = 'failure';
       var description = 'DISQUALIFIED!';
       if (buildStatus == 'SUCCEEDED') {
-        state = 'pending';
-        description = 'SHOW ME WHAT YOU GOT';
+        state = 'success';
+        description = 'I LIKE WHAT YOU GOT';
       } else if (buildStatus == 'IN_PROGRESS') {
         state = 'pending';
-        description = 'I LIKE WHAT YOU GOT';
+        description = 'SHOW ME WHAT YOU GOT';
       }
 
       await octokit.repos.createStatus({
