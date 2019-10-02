@@ -2,6 +2,10 @@
 
 Demo that reports a custom-formatted Rick-and-Morty-themed build status to a GitHub pull request.  Built on top of AWS Lambda.  This example responds to CodeBuild build events in CloudWatch Events, but you can update it to report the status of any kind of job triggered by a pull request.
 
+![](show-me-what-you-got.jpg)
+
+![](i-like-what-you-got.jpg)
+
 ### To install in your AWS account and GitHub account
 
 First, set up a CodeBuild project that builds a repository in your GitHub account, with a GitHub webhook to trigger builds for pull requests. [See directions here.](https://docs.aws.amazon.com/codebuild/latest/userguide/sample-github-pull-request.html)
